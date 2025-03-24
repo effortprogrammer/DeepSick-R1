@@ -249,7 +249,7 @@ class Utility:
             
         return prompt_list
     
-    def functional_reward_fn(model, sampling_params, temperature, max_new_tokens, processor, output_texts, answers, accel): 
+    def functional_reward_fn(model, sampling_params, temperature, processor, output_texts, answers, accel): 
         prompts_text = Utility.reward_prompt(output_texts, answers, processor)
 
         # Generate completions using vLLM: gather all prompts and use them in a single call in the main process
@@ -268,7 +268,7 @@ class Utility:
             # Single generate call with all prompts
             sampling_params.n=1
             sampling_params.temperature=temperature
-            sampling_params.max_tokens=max_new_tokens
+            sampling_params.max_tokens=5
 
             outputs = model.generate(
                 all_multimodal_inputs,
@@ -329,9 +329,9 @@ class Utility:
         return rewards
 
     # trial and error here, for better weightage between the reward components ... 
-    def compute_reward(model, sampling_params, temperature, max_new_tokens, processor, output_texts, answers, accel): 
+    def compute_reward(model, sampling_params, temperature, processor, output_texts, answers, accel): 
         # Rewards: 0 ~ 2
-        functional_rewards = Utility.functional_reward_fn(model, sampling_params, temperature, max_new_tokens, processor, output_texts, answers, accel)
+        functional_rewards = Utility.functional_reward_fn(model, sampling_params, temperature, processor, output_texts, answers, accel)
         
         # Rewards: -1 ~ 2
         structural_rewards = Utility.structural_reward_fn(output_texts)
@@ -375,7 +375,7 @@ class Utility:
         accel.wait_for_everyone()
         return vllm_model, vllm_sampling_params
 
-    def vLLM_generation(vllm_model, vllm_sampling_params, model, accel, num_gens, prompts_text, images, batch_size):
+    def vLLM_generation(vllm_model, vllm_sampling_params, max_new_tokens, model, accel, num_gens, prompts_text, images, batch_size):
         
         # First, have main process load weights if needed
         with unwrap_model_for_generation(
@@ -407,7 +407,7 @@ class Utility:
             # sampling parameter change
             vllm_sampling_params.n=num_gens
             vllm_sampling_params.temperature=1
-            vllm_sampling_params.max_tokens=1024
+            vllm_sampling_params.max_tokens=max_new_tokens
 
             # Single generate call with all prompts
             outputs = vllm_model.generate(

@@ -76,6 +76,7 @@ class GRPOTrainer(Trainer):
         # vLLM generation and merging
         completion_texts = Utility.vLLM_generation(vllm_model,
                                                    vllm_sampling_params,
+                                                   max_new_tokens,
                                                    model,
                                                    self.accel,
                                                    num_gens,
@@ -99,6 +100,8 @@ class GRPOTrainer(Trainer):
                             return_tensors="pt").to(self.accel.device)
         
         # prompt + answer
+        # just in case for that no answer is given
+        if prompt_length==_new_inputs.input_ids.shape[1]: prompt_length-=1
         # [prompt_length mighe be errorneous with +1 or -1 differnece for some samples, but it's fine]
         completion_ids = _new_inputs.input_ids[:, prompt_length:]
         completion_mask = _new_inputs.attention_mask[:, prompt_length:]
@@ -107,7 +110,6 @@ class GRPOTrainer(Trainer):
         rewards = Utility.compute_reward(model=vllm_model,
                                          sampling_params=vllm_sampling_params,
                                          temperature=temperature,
-                                         max_new_tokens=max_new_tokens,
                                          processor=processor,
                                          output_texts=output_texts,
                                          answers=[i['conversations'][qa_ind]['answer'] for i, qa_ind in zip(inputs, qa_index_list)] * num_gens,
@@ -124,6 +126,10 @@ class GRPOTrainer(Trainer):
         self.accel.print('')
         self.accel.print(f'Reward-Ans: {rewards[0][0][0]}, Reward-Format: {rewards[0][0][1]}')
         self.accel.print(f'Advantage: {advantages[0][0]}')
+        self.accel.print(f'Completion mask shape: {completion_mask.shape}')
+        self.accel.print(f'Completion shape: {len(completion_texts)}')
+        self.accel.print(f'prompt_length: {prompt_length}')
+        self.accel.print(f'_new_inputs.input_ids shape: {_new_inputs.input_ids.shape}')
         self.accel.print('--------------------------------------------------')
 
         # per token logps
@@ -185,7 +191,7 @@ def train(args):
     max_pixels = 512*28*28
     processor = AutoProcessor.from_pretrained(args.model_name, padding_side='left', min_pixels=min_pixels, max_pixels=max_pixels)
 
-    # Uploading Qwen2.5-3B-VL
+    # Uploading Qwen2-2B-VL
     model = Qwen2VLForConditionalGeneration.from_pretrained(args.model_name, torch_dtype=torch.bfloat16, attn_implementation="flash_attention_2")
     ref_model = Qwen2VLForConditionalGeneration.from_pretrained(args.model_name, torch_dtype=torch.bfloat16, attn_implementation="flash_attention_2")
     vllm_model, vllm_sampling_params = Utility.load_vLLM(args.model_name,
@@ -256,7 +262,7 @@ if __name__ == "__main__":
     # Training and Saving CKPT Configuration
     parser.add_argument('--batch_size', default=2, type=int)
     parser.add_argument('--epochs', default=1, type=int)
-    parser.add_argument('--lr', default=1e-5, type=float)
+    parser.add_argument('--lr', default=5e-6, type=float)
     parser.add_argument('--last_lr', default=1e-6, type=float)
     parser.add_argument('--weight_decay', default=0, type=float)
     parser.add_argument('--grad_accumul', default=1, type=int)
@@ -268,13 +274,13 @@ if __name__ == "__main__":
     parser.add_argument('--temperature', default=0.01, type=float)
     parser.add_argument('--top_p', default=0.001, type=float)
     parser.add_argument('--top_k', default=1, type=int)
-    parser.add_argument('--max_new_tokens', default=1024, type=int)
+    parser.add_argument('--max_new_tokens', default=512, type=int)
 
     # GRPO Configuration
     parser.add_argument('--grpo_iters', default=4, type=int)
     parser.add_argument('--clip_high_eps', default=0.3, type=float)
     parser.add_argument('--clip_low_eps', default=0.3, type=float)
-    parser.add_argument('--kld_beta', default=0.1, type=float)
+    parser.add_argument('--kld_beta', default=0.5, type=float)
         
     # argument collection
     args = parser.parse_args()
