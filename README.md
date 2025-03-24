@@ -18,6 +18,7 @@
 ## 🚀 Short Talks
 
 - When we train Qwen2-VL-2B-Instruct with 100k QA samples on 2 NVIDIA A100 80GB VRAM, it takes 14 hours to train.
+- Once I increase the number of GPUs to 8 NVIDIA A100 80GB VRAM, it takes 4.5 hours to train (Data communications between vLLM GPu and other GPUs may be getting slow down).
 - The GPU memory usage was 40~60GB when unfreezing all MLP parameters in LLM decoder part, where I use 2 batch, 4 number of generations, and 4 GRPO iterations. 
 - This repository is dealing with vision language models (VLMs) only, but I believe this code is really easy, so users can easily modify the code for LLM version.
 - In the current version, Qwen2.5-VL and latest vLLM are not supported because there is first flash attention issue in latest vLLM version and model parameter access issues. I will let this code updated once it is all resolved.
@@ -60,5 +61,21 @@ utils.py (431 lines)
 ```shell
 # ds_accel.yaml is the config file for deepspeed zero3
 bash train.sh
+```
+
+In this file, you can see the n_gpu. this variable automatically computes the process number for accelerator - DeepSpeed.
+Because vLLM and accelerate are not compatible, this simple trick is really helpful to address the compatibility issue.
+
+```bash
+#!/usr/bin/env bash
+CUDA_DEVICES="0,1,2,3,4,5,6,7"
+length=${#CUDA_DEVICES}
+n_gpu=$(( ( (length + 1) / 2 ) - 1 ))
+
+CUDA_VISIBLE_DEVICES=$CUDA_DEVICES \
+accelerate launch --config_file ds_accel.yaml \
+--num_processes=$n_gpu \
+main.py \
+--wandb True \
 ```
 
