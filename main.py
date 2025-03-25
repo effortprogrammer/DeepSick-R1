@@ -216,12 +216,16 @@ def train(args):
     Utility.freeze_model(ref_model)
     model.train()
     ref_model.eval()
+    for param in ref_model.parameters():
+        param.requires_grad = False  # freeze gradients, not strictly necessary if not training
+    
+    ref_model.to(accel.device)  # move the model to the current process's GPU/CPU
+
 
     # setting optimizer and wrapping accelerator
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     scheduler = torch.optim.lr_scheduler.LinearLR(optimizer, start_factor=1, end_factor=args.last_lr/args.lr, total_iters=len(train_dataloader)*args.epochs)
     model, optimizer, scheduler, train_dataloader = accel.prepare(model, optimizer, scheduler, train_dataloader)
-    ref_model = accel.prepare(ref_model)
 
     # GRPOTrainer
     trainer = GRPOTrainer(save_root='./ckpt', accel=accel)

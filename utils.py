@@ -77,7 +77,7 @@ class Utility:
         return log_probs
 
     def preprocess(inputs, processor):
-
+        
         prompt_list = []
         image_list = []
         qa_index_list = []
